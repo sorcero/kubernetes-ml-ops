@@ -8,7 +8,7 @@ The configuration details for a continuously available cloud deployment are spec
 
 This README is designed to be read in conjunction with the code in this repository, that contains the Python modules, Docker configuration files and Kubernetes instructions for demonstrating how a simple Python ML model can be turned into a production-grade RESTful model-scoring (or prediction) API service, using Docker and Kubernetes - both locally and with Google Cloud Platform (GCP). It is not a comprehensive guide to Kubernetes, Docker or ML - think of it more as a 'ML on Kubernetes 101' for demonstrating capability and allowing newcomers to Kubernetes (e.g. data scientists who are more focused on building models as opposed to deploying them), to get up-and-running quickly and become familiar with the basic concepts and patterns.
 
-We will demonstrate ML model deployment using two different approaches: a first principles approach using Docker and Kubernetes; and then a deployment using the [Seldon-Core](https://www.seldon.io) Kubernetes native framework for streamlining the deployment of ML services. The former will help to appreciate the latter, which constitutes a powerful framework for deploying and performance-monitoring many complex ML model pipelines.
+We will demonstrate ML model deployment using two different approaches: a first principles approach using Docker and Kubernetes.
 
 ## Containerising a Simple ML Model Scoring Service using Flask and Docker
 
@@ -78,17 +78,17 @@ In our example `Dockerfile` we:
 We assume that [Docker is running locally](https://www.docker.com) (both Docker client and daemon), that the client is logged into an account on [DockerHub](https://hub.docker.com) and that there is a terminal open in the this project's root directory. To build the image described in the `Dockerfile` run,
 
 ```bash
-docker build --tag alexioannides/test-ml-score-api py-flask-ml-score-api
+docker build --tag sorcero/test-ml-score-api py-flask-ml-score-api
 ```
 
-Where 'alexioannides' refers to the name of the DockerHub account that we will push the image to, once we have tested it. 
+Where 'sorcero' refers to the name of the DockerHub account that we will push the image to, once we have tested it. 
 
 #### Testing
 
 To test that the image can be used to create a Docker container that functions as we expect it to use,
 
 ```bash
-docker run --rm --name test-api -p 5000:5000 -d alexioannides/test-ml-score-api
+docker run --rm --name test-api -p 5000:5000 -d sorcero/test-ml-score-api
 ```
 
 Where we have mapped port 5000 from the Docker container - i.e. the port our ML model scoring service is listening to - to port 5000 on our host machine (localhost). Then check that the container is listed as running using,
@@ -112,7 +112,7 @@ Where you should expect a response along the lines of,
 {"score":[1,2]}
 ```
 
-All our test model does is return the input data - i.e. it is the identity function. Only a few lines of additional code are required to modify this service to load a SciKit Learn model from disk and pass new data to it's 'predict' method for generating predictions - see [here](https://github.com/AlexIoannides/ml-workflow-automation/blob/master/deploy/py-sklearn-flask-ml-service/api.py) for an example. Now that the container has been confirmed as operational, we can stop it,
+All our test model does is return the input data - i.e. it is the identity function. Only a few lines of additional code are required to modify this service to load a SciKit Learn model from disk and pass new data to it's 'predict' method for generating predictions - see [here](https://github.com/sorcero/ml-workflow-automation/blob/master/deploy/py-sklearn-flask-ml-service/api.py) for an example. Now that the container has been confirmed as operational, we can stop it,
 
 ```bash
 docker stop test-api
@@ -120,13 +120,13 @@ docker stop test-api
 
 #### Pushing the Image to the DockerHub Registry
 
-In order for a remote Docker host or Kubernetes cluster to have access to the image we've created, we need to publish it to an image registry. All cloud computing providers that offer managed Docker-based services will provide private image registries, but we will use the public image registry at DockerHub, for convenience. To push our new image to DockerHub (where my account ID is 'alexioannides') use,
+In order for a remote Docker host or Kubernetes cluster to have access to the image we've created, we need to publish it to an image registry. All cloud computing providers that offer managed Docker-based services will provide private image registries, but we will use the public image registry at DockerHub, for convenience. To push our new image to DockerHub (where the account ID is 'sorcero') use,
 
 ```bash
-docker push alexioannides/test-ml-score-api
+docker push sorcero/test-ml-score-api
 ```
 
-Where we can now see that our chosen naming convention for the image is intrinsically linked to our target image registry (you will need to insert your own account ID where required). Once the upload is finished, log onto DockerHub to confirm that the upload has been successful via the [DockerHub UI](https://hub.docker.com/u/alexioannides).
+Where we can now see that our chosen naming convention for the image is intrinsically linked to our target image registry (you will need to insert your own account ID where required). Once the upload is finished, log onto DockerHub to confirm that the upload has been successful via the [DockerHub UI](https://hub.docker.com/u/sorcero).
 
 ## Installing Kubernetes for Local Development and Testing
 
@@ -277,7 +277,7 @@ And then go make a cup of coffee while you wait for the cluster to be created. N
 This is largely the same as we did for running the test service locally - run the following commands in sequence,
 
 ```bash
-kubectl create deployment test-ml-score-api --image=alexioannides/test-ml-score-api:latest
+kubectl create deployment test-ml-score-api --image=sorcero/test-ml-score-api:latest
 kubectl expose deployment test-ml-score-api --port 5000 --type=LoadBalancer --name test-ml-score-api-lb
 ```
 
