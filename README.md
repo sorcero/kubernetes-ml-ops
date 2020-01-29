@@ -1,5 +1,15 @@
 # Deploying Machine Learning Models on Kubernetes
 
+Hello, as a primer, this document covers how we can build out ML microservices for ML components. 
+And also touches upon the larger ecosystem in which the models operate. 
+
+This has been forked from Alex Ioannides' excellent resources. The accompanying article is at: https://alexioannides.com/2019/01/10/deploying-python-ml-models-with-flask-docker-and-kubernetes/
+
+Currently, we will use this as a primer resource as we build and fortify our approach toward both ML and non-ML components. 
+Alex's article suggests pipenv for dependencies, we can however continue with pip as usual. 
+
+
+
 A common pattern for deploying Machine Learning (ML) models into production environments - e.g. ML models trained using the SciKit Learn or Keras packages (for Python), that are ready to provide predictions on new data - is to expose these ML as RESTful API microservices, hosted from within [Docker](https://www.docker.com) containers. These can then deployed to a cloud environment for handling everything required for maintaining continuous availability - e.g. fault-tolerance, auto-scaling, load balancing and rolling service updates.
 
 The configuration details for a continuously available cloud deployment are specific to the targeted cloud provider(s) - e.g. the deployment process and topology for Amazon Web Services is not the same as that for Microsoft Azure, which in-turn is not the same as that for Google Cloud Platform. This constitutes knowledge that needs to be acquired for every cloud provider. Furthermore, it is difficult (some would say near impossible) to test entire deployment strategies locally, which makes issues such as networking hard to debug.
@@ -46,7 +56,7 @@ if __name__ == '__main__':
 
 If running locally - e.g. by starting the web service using `python run api.py` - we would be able reach our function (or 'endpoint') at `http://localhost:5000/score`. This function takes data sent to it as JSON (that has been automatically de-serialised as a Python dict made available as the `request` variable in our function definition), and returns a response (automatically serialised as JSON).
 
-In our example function, we expect an array of features, `X`, that we pass to a ML model, which in our example returns those same features back to the caller - i.e. our chosen ML model is the identity function, which we have chosen for purely demonstrative purposes. We could just as easily have loaded a pickled SciKit-Learn or Keras model and passed the data to the approproate `predict` method, returning a score for the feature-data as JSON - see [here](https://github.com/AlexIoannides/ml-workflow-automation/blob/master/deploy/py-sklearn-flask-ml-service/api.py) for an example of this in action.
+In our example function, we expect an array of features, `X`, that we pass to a ML model, which in our example returns those same features back to the caller - i.e. our chosen ML model is the identity function, which we have chosen for purely demonstrative purposes. We could just as easily have loaded a pickled SciKit-Learn or Keras model and passed the data to the approproate `predict` method, returning a score for the feature-data as JSON - see [here](https://github.com/sorcero/ml-workflow-automation/blob/master/deploy/py-sklearn-flask-ml-service/api.py) for an example of this in action.
 
 ### Defining the Docker Image with the `Dockerfile`
 
@@ -178,7 +188,7 @@ Where `kubectl` is the standard Command Line Interface (CLI) client for interact
 To launch our test model scoring service on Kubernetes, we will start by deploying the containerised service within a Kubernetes [Pod](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/), whose rollout is managed by a [Deployment](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/), which in in-turn creates a [ReplicaSet](https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/) - a Kubernetes resource that ensures a minimum number of pods (or replicas), running our service are operational at any given time. This is achieved with,
 
 ```bash
-kubectl create deployment test-ml-score-api --image=alexioannides/test-ml-score-api:latest
+kubectl create deployment test-ml-score-api --image=sorcero/test-ml-score-api:latest
 ```
 
 To check on the status of the deployment run,
@@ -512,215 +522,7 @@ The ML scoring service can now be tested in exactly the same way as we have done
 helm delete test-ml-app
 ```
 
-## Using Seldon to Deploy the ML Model Scoring Service to Kubernetes
-
-Seldon's core mission is to simplify the repeated deployment and management of complex ML prediction pipelines on top of Kubernetes. In this demonstration we are going to focus on the simplest possible example - i.e. the simple ML model scoring API we have already been using.
-
-### Building an ML Component for Seldon
-
-To deploy a ML component using Seldon, we need to create Seldon-compatible Docker images. We start by following [these guidelines](https://docs.seldon.io/projects/seldon-core/en/latest/python/python_wrapping_docker.html) for defining a Python class that wraps an ML model targeted for deployment with Seldon. This is contained within the `seldon-ml-score-component` directory, whose contents are similar to those in `py-flask-ml-score-api`,
-
-```bash
-seldon-ml-score-component/
- | Dockerfile
- | MLScore.py
- | Pipfile
- | Pipfile.lock
-```
-
-#### Building the Docker Image for use with Seldon
-
-Seldon requires that the Docker image for the ML scoring service be structured in a particular way:
-
-- the ML model has to be wrapped in a Python class with a `predict` method with a particular signature (or interface) - for example, in `MLScore.py` (deliberately named after the Python class contained within it) we have,
-
-```python
-class MLScore:
-    """
-    Model template. You can load your model parameters in __init__ from
-    a location accessible at runtime
-    """
-
-    def __init__(self):
-        """
-        Load models and add any initialization parameters (these will
-        be passed at runtime from the graph definition parameters
-        defined in your seldondeployment kubernetes resource manifest).
-        """
-        print("Initializing")
-
-    def predict(self, X, features_names):
-        """
-        Return a prediction.
-
-        Parameters
-        ----------
-        X : array-like
-        feature_names : array of feature names (optional)
-        """
-        print("Predict called - will run identity function")
-        return X
-```
-
-- the `seldon-core` Python package must be installed (we use `pipenv` to manage dependencies as discussed above and in the Appendix below); and,
-- the container starts by running the Seldon service using the `seldon-core-microservice` entry-point provided by the `seldon-core` package - both this and the point above can be seen the `DockerFile`,
-
-```docker
-FROM python:3.6-slim
-COPY . /app
-WORKDIR /app
-RUN pip install pipenv
-RUN pipenv install
-EXPOSE 5000
-
-# Define environment variable
-ENV MODEL_NAME MLScore
-ENV API_TYPE REST
-ENV SERVICE_TYPE MODEL
-ENV PERSISTENCE 0
-
-CMD pipenv run seldon-core-microservice $MODEL_NAME $API_TYPE --service-type $SERVICE_TYPE --persistence $PERSISTENCE
-```
-
-For the precise details refer to the [official Seldon documentation](https://docs.seldon.io/projects/seldon-core/en/latest/python/index.html). Next, build this image,
-
-```bash
-docker build seldon-ml-score-component -t alexioannides/test-ml-score-seldon-api:latest
-```
-
-Before we push this image to our registry, we need to make sure that it's working as expected. Start the image on the local Docker daemon,
-
-```bash
-docker run --rm -p 5000:5000 -d alexioannides/test-ml-score-seldon-api:latest
-```
-
-And then send it a request (using a different request format to the ones we've used thus far),
-
-```bash
-curl -g http://localhost:5000/predict \
-    --data-urlencode 'json={"data":{"names":["a","b"],"tensor":{"shape":[2,2],"values":[0,0,1,1]}}}'
-```
-
-If response is as expected (i.e. it contains the same payload as the request), then push the image,
-
-```bash
-docker push alexioannides/test-ml-score-seldon-api:latest
-```
-
-### Deploying a ML Component with Seldon Core
-
-We now move on to deploying our Seldon compatible ML component to a Kubernetes cluster and creating a fault-tolerant and scalable service from it. To achieve this, we will [deploy Seldon-Core using Helm charts](https://docs.seldon.io/projects/seldon-core/en/latest/workflow/install.html). We start by creating a namespace that will contain the `seldon-core-operator`, a custom Kubernetes resource required to deploy any ML model using Seldon,
-
-```bash
-kubectl create namespace seldon-core
-```
-
-Then we deploy Seldon-Core using Helm and the official Seldon Helm chart repository hosted at `https://storage.googleapis.com/seldon-charts`,
-
-```bash
-helm install seldon-core-operator \
-  --name seldon-core \
-  --repo https://storage.googleapis.com/seldon-charts \
-  --set usageMetrics.enabled=false \
-  --namespace seldon-core
-```
-
-Next, we deploy the Ambassador API gateway for Kubernetes, that will act as a single point of entry into our Kubernetes cluster and will be able to route requests to any ML model we have deployed using Seldon. We will create a dedicate namespace for the Ambassador deployment,
-
-```bash
-kubectl create namespace ambassador
-```
-
-And then deploy Ambassador using the most recent charts in the official Helm repository,
-
-```bash
-helm install stable/ambassador \
-  --name ambassador \
-  --set crds.keep=false \
-  --namespace ambassador
-```
-
-If we now run `helm list --namespace seldon-core` we should see that Seldon-Core has been deployed and is waiting for Seldon ML components to be deployed. To deploy our Seldon ML model scoring service we create a separate namespace for it,
-
-```bash
-kubectl create namespace test-ml-seldon-app
-```
-
-And then configure and deploy another official Seldon Helm chart as follows,
-
-```bash
-helm install seldon-single-model \
-  --name test-ml-seldon-app \
-  --repo https://storage.googleapis.com/seldon-charts \
-  --set model.image.name=alexioannides/test-ml-score-seldon-api:latest \
-  --namespace test-ml-seldon-app
-```
-
-Note, that multiple ML models can now be deployed using Seldon by repeating the last two steps and they will all be automatically reachable via the same Ambassador API gateway, which we will now use to test our Seldon ML model scoring service.
-
-### Testing the API via the Ambassador Gateway API
-
-To test the Seldon-based ML model scoring service, we follow the same general approach as we did for our first-principles Kubernetes deployments above, but we will route our requests via the Ambassador API gateway. To find the IP address for Ambassador service run,
-
-```bash
-kubectl -n ambassador get service ambassador
-```
-
-Which will be `localhost:80` if using Docker Desktop, or an IP address if running on GCP or Minikube (were you will need to remember to use `minikuke service list` in the latter case). Now test the prediction end-point - for example,
-
-```bash
-curl http://35.246.28.247:80/seldon/test-ml-seldon-app/test-ml-seldon-app/api/v0.1/predictions \
-    --request POST \
-    --header "Content-Type: application/json" \
-    --data '{"data":{"names":["a","b"],"tensor":{"shape":[2,2],"values":[0,0,1,1]}}}'
-```
-
-If you want to understand the full logic behind the routing see the [Seldon documentation](https://docs.seldon.io/projects/seldon-core/en/latest/workflow/serving.html), but the URL is essentially assembled using,
-
-```html
-http://<ambassadorEndpoint>/seldon/<namespace>/<deploymentName>/api/v0.1/predictions
-```
-
-If your request has been successful, then you should see a response along the lines of,
-
-```json
-{
-  "meta": {
-    "puid": "hsu0j9c39a4avmeonhj2ugllh9",
-    "tags": {
-    },
-    "routing": {
-    },
-    "requestPath": {
-      "classifier": "alexioannides/test-ml-score-seldon-api:latest"
-    },
-    "metrics": []
-  },
-  "data": {
-    "names": ["t:0", "t:1"],
-    "tensor": {
-      "shape": [2, 2],
-      "values": [0.0, 0.0, 1.0, 1.0]
-    }
-  }
-}
-```
-
 ## Tear Down
-
-To delete a single Seldon ML model and its namespace, deployed using the steps above, run,
-
-```bash
-helm delete test-ml-seldon-app --purge &&
-  kubectl delete namespace test-ml-seldon-app
-```
-
-Follow the same pattern to remove the Seldon Core Operator and Ambassador,
-
-```bash
-helm delete seldon-core --purge && kubectl delete namespace seldon-core
-helm delete ambassador --purge && kubectl delete namespace ambassador
-```
 
 If there is a GCP cluster that needs to be killed run,
 
@@ -736,16 +538,6 @@ minikube delete
 ```
 
 If running on Docker Desktop, navigate to `Preferences -> Reset` to reset the cluster.
-
-## Where to go from Here
-
-The following list of resources will help you dive deeply into the subjects we skimmed-over above:
-
-- the full set of functionality provided by [Seldon](https://www.seldon.io/open-source/);
-- running multi-stage containerised workflows (e.g. for data engineering and model training) using [Argo Workflows](https://argoproj.github.io/argo);
-- the excellent '_Kubernetes in Action_' by Marko Lukša [available from Manning Publications](https://www.manning.com/books/kubernetes-in-action);
-- '_Docker in Action_' by Jeff Nickoloff and Stephen Kuenzli [also available from Manning Publications](https://www.manning.com/books/docker-in-action-second-edition); and,
-- _'Flask Web Development'_ by Miguel Grinberg [O'Reilly](http://shop.oreilly.com/product/0636920089056.do).
 
 ## Appendix - Using Pipenv for Managing Python Package Dependencies
 
