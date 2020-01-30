@@ -18,7 +18,7 @@ The configuration details for a continuously available cloud deployment are spec
 
 This README is designed to be read in conjunction with the code in this repository, that contains the Python modules, Docker configuration files and Kubernetes instructions for demonstrating how a simple Python ML model can be turned into a production-grade RESTful model-scoring (or prediction) API service, using Docker and Kubernetes - both locally and with Google Cloud Platform (GCP). It is not a comprehensive guide to Kubernetes, Docker or ML - think of it more as a 'ML on Kubernetes 101' for demonstrating capability and allowing newcomers to Kubernetes (e.g. data scientists who are more focused on building models as opposed to deploying them), to get up-and-running quickly and become familiar with the basic concepts and patterns.
 
-We will demonstrate ML model deployment using two different approaches: a first principles approach using Docker and Kubernetes.
+We will demonstrate ML model deployment using a first principles approach using Docker and Kubernetes.
 
 ## Containerising a Simple ML Model Scoring Service using Flask and Docker
 
